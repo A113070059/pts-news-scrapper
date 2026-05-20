@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>公視新聞搜尋引擎</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #f5f6fa; }
+        .search-container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        input[type="text"] { width: 70%; padding: 10px; font-size: 16px; border: 1px solid #ddd; border-radius: 4px; }
+        button { padding: 10px 20px; font-size: 16px; background-color: #00a8ff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background-color: #0097e6; }
+        .news-item { background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .news-item a { text-decoration: none; color: #2f3640; font-weight: bold; font-size: 18px; }
+        .news-item a:hover { color: #00a8ff; }
+    </style>
+</head>
+<body>
+
+    <div class="search-container">
+        <h2>新聞搜尋引擎 (測試版)</h2>
+        <input type="text" id="searchInput" placeholder="輸入關鍵字...">
+        <button onclick="searchNews()">搜尋</button>
+    </div>
+
+    <div id="results">
+        <!-- 搜尋結果會顯示在這裡 -->
+        <div class="news-item">
+            <a href="#">這裡之後會透過程式自動載入新聞標題...</a>
+        </div>
+    </div>
+
+    <script>
+        // 這裡之後會寫 JavaScript 來串接資料
+        function searchNews() {
+            alert("目前還沒串接資料，你輸入了：" + document.getElementById('searchInput').value);
+        }
+    </script>
+
+</body>
+</html>
