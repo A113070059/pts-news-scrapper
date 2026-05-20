@@ -6,12 +6,10 @@ from psycopg2.extras import execute_values
 from datetime import datetime
 
 # ==========================================
-# 1. 設定參數區 (修改為讀取環境變數)
+# 1. 設定參數區
 # ==========================================
-# 這裡不再寫死密碼，而是從作業系統（或 GitHub Actions）的環境變數讀取
 AIVEN_DB_URI = os.environ.get("DATABASE_URL")
 
-# 加上檢查機制：如果 GitHub 那邊忘記設定 Secret，程式會立刻停止並印出錯誤
 if not AIVEN_DB_URI:
     raise ValueError("找不到 DATABASE_URL 環境變數，請確認是否已在 GitHub Secrets 中設定！")
 
@@ -24,20 +22,28 @@ HEADERS = {
 # 2. 資料庫與爬蟲函數
 # ==========================================
 def init_db(conn):
-    """建立新聞資料表（如果還不存在的話）"""
+    """初始化資料庫並處理欄位更新"""
     with conn.cursor() as cur:
+        # 1. 建立包含 publish_date 欄位的新資料表 (針對全新安裝)
         cur.execute("""
             CREATE TABLE IF NOT EXISTS pts_news (
                 id SERIAL PRIMARY KEY,
                 title VARCHAR(255) NOT NULL,
                 url TEXT UNIQUE NOT NULL,
+                publish_date VARCHAR(50), 
                 scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
+        """)
+        
+        # 2. ⚠️ 神奇魔法：針對你已經建好的「舊資料表」，這行會自動幫你補上新欄位！
+        cur.execute("""
+            ALTER TABLE pts_news 
+            ADD COLUMN IF NOT EXISTS publish_date VARCHAR(50);
         """)
     conn.commit()
 
 def scrape_pts():
-    """抓取公視新聞網的標題與連結"""
+    """抓取公視新聞網的標題、連結與發布時間"""
     print(f"開始抓取: {TARGET_URL}")
     response = requests.get(TARGET_URL, headers=HEADERS)
     response.raise_for_status()
@@ -45,17 +51,27 @@ def scrape_pts():
     soup = BeautifulSoup(response.text, "html.parser")
     news_data = []
 
+    # 針對公視新聞的結構：先找到新聞標題的 <h2>
     articles = soup.find_all("h2") 
     for article in articles:
         link_tag = article.find("a")
+        
         if link_tag and link_tag.get("href"):
             title = link_tag.text.strip()
             url = link_tag.get("href")
-            
             if not url.startswith("http"):
                 url = "https://news.pts.org.tw" + url
-                
-            news_data.append((title, url))
+            
+            # --- 新增的抓取時間邏輯 ---
+            # 新聞時間通常包在與標題同一區塊的 <time> 標籤內
+            # 我們從標題 (h2) 往上找父層容器，再往下找時間標籤
+            parent_div = article.find_parent()
+            time_tag = parent_div.find("time") if parent_div else None
+            
+            # 取得時間文字，如果網頁改版導致沒抓到，則預設存成 "未標示"
+            publish_date = time_tag.text.strip() if time_tag else "未標示"
+            
+            news_data.append((title, url, publish_date))
             
     return news_data
 
@@ -65,8 +81,9 @@ def save_to_aiven(conn, news_data):
         print("本次沒有抓到任何資料。")
         return
 
+    # SQL 語法加入 publish_date，注意 VALUES 變成三個 %s
     insert_query = """
-        INSERT INTO pts_news (title, url) 
+        INSERT INTO pts_news (title, url, publish_date) 
         VALUES %s 
         ON CONFLICT (url) DO NOTHING;
     """
@@ -77,10 +94,9 @@ def save_to_aiven(conn, news_data):
     print(f"資料庫寫入完成！成功抓取並檢查了 {len(news_data)} 筆新聞。")
 
 # ==========================================
-# 3. 主程式執行區塊 (單次執行)
+# 3. 主程式執行區塊
 # ==========================================
 def main():
-    # 紀錄執行當下的時間，方便在 GitHub Actions 的 Log 裡面查看
     current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     print(f"[{current_time}] 開始執行爬蟲任務...")
     
@@ -98,6 +114,5 @@ def main():
             connection.close()
             print("任務結束，資料庫連線已關閉。")
 
-# 當程式被執行時，只會呼叫 main() 跑一次就結束
 if __name__ == "__main__":
     main()
